@@ -1,7 +1,6 @@
 #XOR implementation - forward pass
 import numpy as np
 
-
 def init_inputs():
     # x-no of inputs like x1,x2,x3...
     n_inputs = int(input("Enter the number of inputs: "))
