@@ -3,6 +3,7 @@ import torch.nn as nn
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+from torch.nn.functional import dropout
 from torch.utils.data import TensorDataset, DataLoader
 import itertools
 from torch.nn import functional as F
@@ -12,10 +13,14 @@ from torch.nn import functional as F
 # #data preprocessing
 # #making the 1st column as index and transposing
 # Loading and transposing
-input = pd.read_csv("landmark_genes.csv",sep='\t', index_col=0).T
-input = input.iloc[1:, :]
-output = pd.read_csv("target_genes.csv",sep='\t', index_col=0).T
-output = output.iloc[1:, :]
+input = pd.read_csv("landmark_genes.csv",sep='\t', index_col=0)
+output = pd.read_csv("target_genes.csv",sep='\t', index_col=0)
+# Drop metadata cols (first 4)
+input = input.iloc[:, 4:]  #keep only expression values
+# Transpose so samples = rows, genes = columns
+input = input.T
+output = output.iloc[:, 4:]
+output = output.T
 
 input = input.apply(pd.to_numeric, errors="coerce")
 output=output.apply(pd.to_numeric, errors="coerce")
@@ -24,6 +29,7 @@ output=output.apply(pd.to_numeric, errors="coerce")
 # Fill NaNs with column mean
 input= input.fillna(input.mean())
 output= output.fillna(output.mean())
+print(input.nunique()) #shows unique value per column
 #train,test and val split
 X_train,X_tv,y_train,y_tv=train_test_split(input,output,test_size=0.2,random_state=42)
 X_val,X_test,y_val,y_test=train_test_split(X_tv,y_tv,test_size=0.5,random_state=42)
@@ -139,7 +145,7 @@ def hyperparameter_tuning(X_train,y_train,X_val,y_val,input_dim,output_dim):
         param_grid["lr"],
         param_grid["batch_size"]
     ):
-        print(f"Training with hidden_dim:{hidden_dim},dropout:{dropout},lr:{lr},batch_size:{batch_size}")
+        print(f"Training with hidden_dim:{hidden_dim},lr:{lr},batch_size:{batch_size}")
 
         train_data=TensorDataset(X_train,y_train)
         val_data=TensorDataset(X_val,y_val)
@@ -174,7 +180,7 @@ train_and_val_loader=DataLoader(train_and_val_data,batch_size=batch_size,shuffle
 test_loader=DataLoader(TensorDataset(X_test,y_test),batch_size=batch_size)
 
 #final model
-final_model=Model(input_dim,output_dim,hidden_dim=hidden_dim,dropout=dropout)
+final_model=Model(input_dim,output_dim,hidden_dim=hidden_dim,) #change dropout
 optimizer=torch.optim.Adam(final_model.parameters(),lr=lr)
 loss_fn=nn.MSELoss()
 
@@ -205,3 +211,5 @@ test_loss=test_loss/len(test_loader.dataset)
 
 print(f"Test loss:{test_loss:.4f}")
 
+print(X_train[:5])
+print(X_test[:5])
