@@ -32,6 +32,7 @@ test_loader=DataLoader(test_data,batch_size=64,shuffle=False,num_workers=4)
 #loading the pretrained ResNet18
 print(f"loading the pretrained ResNet model..")
 model=models.resnet18(weights='IMAGENET1K_V1')
+print(model)
 # or we can use weights=pretrained=True
 model= model.to(device)
 
@@ -50,7 +51,9 @@ def extract_features(dataloader,desc="Extracting features"):
         for images,targets in tqdm(dataloader, desc=desc):
             images=images.to(device)
             feats=feature_extractor(images)
+            # print(f"Shape after feature extraction: {feats.shape}") #this is ([62,512,1,1])
             feats=feats.view(feats.size(0),-1) #flattens the image from (batch_size,512,1,1) -> (batch_size,512)
+            # print(f"Shape after flattening: {feats.shape}")
             features.append(feats.cpu().numpy()) #moves the features back to cpu, inorder to be trained for the SVM
             labels.append(targets.numpy()) #also convert them to numpy format
     features=np.concatenate(features,axis=0)
