@@ -23,10 +23,30 @@ print(f"loading the data..")
 train_loader=torch.utils.data.DataLoader(dataset=train_data,batch_size=64,shuffle=True,num_workers=4)
 test_loader=torch.utils.data.DataLoader(dataset=test_data,batch_size=64,shuffle=False,num_workers=4)
 print(f"loading the pretrained model..")
+
+
+#use this when u have downloaded the PRETRAINED WEIGHTS
+# print(f"loading the pretrained model..")
+# # Initialize the ResNet18 model without downloading weights
+# model = models.resnet18(weights=None)
+#
+# # Load the downloaded pretrained weights manually (offline)
+# state_dict = torch.load('./weights/resnet18-f37072fd.pth', map_location='cpu')  # adjust the path
+# model.load_state_dict(state_dict)
+#
+# # Freeze all parameters (feature extractor)
+# for param in model.parameters():
+#     param.requires_grad = False
+#
+# # Replace the final FC layer for CIFAR-10
+# num_features = model.fc.in_features
+# model.fc = nn.Linear(num_features, 10)
+
+
 #loading the pretrained dataset
 model=models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = model.to(device)
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# model = model.to(device)
 for param in model.parameters():
     param.requires_grad=False #because it is a feature extractor
 
@@ -65,13 +85,12 @@ for epoch in range(num_epochs):
     # tqdm progress bar for train_loader because it is slow..
     loop=tqdm(train_loader, desc=f"Epoch [{epoch+1}/{num_epochs}]", leave=False)
     for images,labels in loop:
-        images,labels = images.to(device), labels.to(device)
-        optimizer.zero_grad()
+        # images,labels = images.to(device), labels.to(device)
+        optimizer.zero_grad() #resets gradients
         outputs = model(images)
         loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
-        running_loss += loss.item() * images.size(0)
+        loss.backward() #compute new gradients
+        optimizer.step() #updates weights       running_loss += loss.item() * images.size(0)
         # update tqdm bar with batch loss
         loop.set_postfix(batch_loss=loss.item())
     # average loss for the epoch
@@ -83,9 +102,10 @@ print(f"Evaluating the model..")
 model.eval()
 total=0
 correct=0
+#or total,correct=0,0
 with torch.no_grad():
     for images,labels in test_loader:
-        images, labels = images.to(device), labels.to(device)
+        # images, labels = images.to(device), labels.to(device)
         outputs=model(images)
         _,predicted=torch.max(outputs.data,1)
         total+=labels.size(0)

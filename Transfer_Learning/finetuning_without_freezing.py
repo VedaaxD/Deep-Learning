@@ -41,7 +41,6 @@ num_features=model.fc.in_features
 #just replace the final FC layer
 model.fc=nn.Linear(num_features,10) #as cifar has 10 classes
 
-#only train the new fc layer
 criterion=nn.CrossEntropyLoss()
 # optimizer=optim.Adam(model.fc.parameters(),lr=0.001) #This would be changed too
 optimizer=optim.Adam(model.parameters(),lr=0.001) #as the whole network must be trained

@@ -1,0 +1,6 @@
+Lab6_and_Lab7/data/
+Lab6_and_Lab7/faces/
+# Ignore dataset files
+*.tar.gz
+data/
+Transfer_Learning/data/
