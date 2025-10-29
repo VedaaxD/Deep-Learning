@@ -6,3 +6,7 @@ data/
 Transfer_Learning/data/
 Lab16/Hin2Eng_Model/
 *.pth
+Lab16/Hin2Eng_Model/
+Lab17/cafa-6-protein-function-prediction/
+*.pth
+*.fasta
