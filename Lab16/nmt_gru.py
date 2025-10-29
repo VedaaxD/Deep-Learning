@@ -1,22 +1,22 @@
-# ----------------------- IMPORTS & SETUP -----------------------
-import spacy                      # tokenizer (English: en_core_web_sm); Hindi: spaCy blank model used
-import pandas as pd               # reading CSVs and simple table ops
-import torch                      # main PyTorch package
-import torch.nn as nn             # neural network building blocks
-import torch.optim as optim       # optimizers (Adam etc.)
+#Implementing NMT using GRU
+import spacy   # tokenizer (English: en_core_web_sm); Hindi: spaCy blank model used
+import pandas as pd
+import torch
+import torch.nn as nn
+import torch.optim as optim
 from matplotlib import pyplot as plt  # plotting losses and BLEU
-from torch.utils.data import Dataset, DataLoader  # dataset / dataloader abstractions
-from sklearn.model_selection import train_test_split  # train/test splitting utility
-from collections import Counter  # frequency counting for vocab building
+from torch.utils.data import Dataset, DataLoader
+from sklearn.model_selection import train_test_split
+from collections import Counter
 from nltk.translate.bleu_score import corpus_bleu, SmoothingFunction  # BLEU evaluation
-from tqdm import tqdm             # progress bars
-import os                         # file system operations
+from tqdm import tqdm
+import os
 
-# ----------------------- CONFIG / HYPERPARAMETERS -----------------------
-# device: use GPU if available, else CPU. Always check this early to avoid silent CPU training.
+
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# constants / hyperparameters — tune based on GPU memory and dataset size
+#constants / hyperparameters — tune based on GPU memory and dataset size
 MAX_LEN = 12           # max tokens per sentence (smaller -> faster, but truncates long sentences)
 BATCH_SIZE = 64        # batch size for training/eval
 EMB_DIM = 128          # token embedding dimension
@@ -28,7 +28,7 @@ NUM_WORKERS = 6        # DataLoader workers (increase on machines with many CPUs
 SAVE_DIR = "Hin2Eng_Model"  # where models and plots will be saved
 os.makedirs(SAVE_DIR, exist_ok=True)  # create save directory if it doesn't exist
 
-# ----------------------- DATASET CLASS -----------------------
+
 class Hin2Eng(Dataset):
     """
     Basic PyTorch Dataset that stores pre-tokenized & encoded lists of equal-length sequences.
@@ -47,7 +47,7 @@ class Hin2Eng(Dataset):
         # return a single pair (src, trg)
         return self.source_tensor[idx], self.target_tensor[idx]
 
-# ----------------------- DATA PREPROCESSING -----------------------
+# Data preprocessing
 def Data_Preprocessing(data):
     """
     Inputs:
@@ -137,7 +137,7 @@ def Data_Preprocessing(data):
     # return everything you might need later
     return Train_loader, Test_loader, source_vocab, target_vocab, source_itos, target_itos, hindi, english
 
-# ----------------------- MODEL COMPONENTS -----------------------
+
 class Encoder(nn.Module):
     """
     Encoder uses a GRU RNN. It takes a batch of source token indices shaped (batch, seq_len),
@@ -224,7 +224,7 @@ class Seq2Seq(nn.Module):
             input = trg[:, t] if teacher_force else output.argmax(1)
         return outputs
 
-# ----------------------- TRAINING & EVALUATION HELPERS -----------------------
+#training
 def train_epoch(model, dataloader, criterion, optimizer):
     """
     Runs one training epoch over dataloader. Returns average loss.
@@ -301,7 +301,7 @@ def evaluate(model, dataloader, criterion, target_itos):
     bleu = corpus_bleu(references, candidates, smoothing_function=chencherry.method4)
     return total_loss / len(dataloader), bleu, candidates, references
 
-# ----------------------- MAIN TRAINING SCRIPT -----------------------
+#main script
 if __name__ == "__main__":
     # load data CSV (ensure correct path)
     data = pd.read_csv("Hindi_English_Truncated_Corpus.csv")
@@ -347,13 +347,13 @@ if __name__ == "__main__":
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             torch.save(model.state_dict(), os.path.join(SAVE_DIR, "best_val_loss_model.pth"))
-            print(f"✅ Best Val Loss model saved at epoch {epoch+1}")
+            print(f"Best Val Loss model saved at epoch {epoch+1}")
 
         # save best model by BLEU score
         if bleu_score > best_bleu:
             best_bleu = bleu_score
             torch.save(model.state_dict(), os.path.join(SAVE_DIR, "best_bleu_model.pth"))
-            print(f"🌟 Best BLEU model saved at epoch {epoch+1} (BLEU: {bleu_score:.4f})")
+            print(f"Best BLEU model saved at epoch {epoch+1} (BLEU: {bleu_score:.4f})")
 
         # periodic checkpoint every 50 epochs (saves intermediate progress)
         if (epoch + 1) % 50 == 0:
@@ -364,7 +364,7 @@ if __name__ == "__main__":
         # free GPU cache between epochs (useful if you see increasing memory)
         torch.cuda.empty_cache()
 
-    print(f"\n✅ Training complete! Best Val Loss: {best_val_loss:.4f}, Best BLEU: {best_bleu:.4f}")
+    print(f"\nTraining complete! Best Val Loss: {best_val_loss:.4f}, Best BLEU: {best_bleu:.4f}")
 
     # ----------------------- PLOTTING -----------------------
     # plot and save train/val loss figure

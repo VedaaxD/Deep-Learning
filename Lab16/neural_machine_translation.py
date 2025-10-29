@@ -264,9 +264,11 @@ print(f"LSTM: {bleu_lstm:.4f}")
 print(f"GRU: {bleu_gru:.4f}")
 
 if bleu_lstm > bleu_gru:
-    print("✅ LSTM performs better")
+    print("LSTM performs better")
 elif bleu_gru > bleu_lstm:
-    print("✅ GRU performs better")
+    print("GRU performs better")
 else:
     print("Both models perform equally")
 
+#This code takes a very long time to run, I have optimized this code in separate sections LSTM and GRU
+#Additionally performed nmt using transformers

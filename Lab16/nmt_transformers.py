@@ -1,18 +1,15 @@
-# ===============================================
-# 🔹 IMPORT ALL REQUIRED LIBRARIES
-# ===============================================
-import pandas as pd                  # For loading and manipulating CSV data
-import torch                         # For tensors and general deep learning
-import torch.nn as nn                # For neural network building blocks (layers, loss)
-from torch.utils.data import Dataset, DataLoader, random_split  # For dataset & batching
+#Implementing Neural machine translation using Transformers
+
+import pandas as pd
+import torch
+import torch.nn as nn
+from torch.utils.data import Dataset, DataLoader, random_split
 from nltk.translate.bleu_score import corpus_bleu, SmoothingFunction  # For BLEU score evaluation
 
 # Select GPU if available, otherwise use CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# ===============================================
-# 1️⃣ DEFINE CUSTOM DATASET CLASS
-# ===============================================
+#define the dataset class
 class TranslationDataset(Dataset):
     def __init__(self, csv_file, src_col='hindi_sentence', trg_col='english_sentence', max_len=20):
         # Load CSV data into a pandas DataFrame
@@ -25,15 +22,12 @@ class TranslationDataset(Dataset):
         self.src_vocab = self.build_vocab(self.data[src_col])
         self.trg_vocab = self.build_vocab(self.data[trg_col])
 
-        # Create word → index and index → word mappings for both languages
+        #Create word → index and index → word mappings for both languages
         self.src2idx = {w: i for i, w in enumerate(self.src_vocab)}  # word to id
         self.trg2idx = {w: i for i, w in enumerate(self.trg_vocab)}
         self.idx2src = {i: w for w, i in self.src2idx.items()}        # id to word
         self.idx2trg = {i: w for w, i in self.trg2idx.items()}
 
-    # ------------------------------------------------
-    # Helper function: build a vocabulary from sentences
-    # ------------------------------------------------
     def build_vocab(self, sentences, min_freq=1):
         from collections import Counter
         counter = Counter()
@@ -54,9 +48,7 @@ class TranslationDataset(Dataset):
                 vocab.append(word)
         return vocab
 
-    # ------------------------------------------------
-    # Convert a sentence into list of token IDs
-    # ------------------------------------------------
+ #convert a sentence to list of token IDs
     def encode_sentence(self, sentence, vocab_map, max_len, add_start_end=False):
         # Convert each word to ID, or use <UNK> (unknown) if word not in vocab
         tokens = [vocab_map.get(w, vocab_map["<UNK>"]) for w in sentence.lower().split()]
@@ -90,9 +82,7 @@ class TranslationDataset(Dataset):
 
         return torch.tensor(src_tokens, dtype=torch.long), torch.tensor(trg_tokens, dtype=torch.long)
 
-# ===============================================
-# 2️⃣ POSITIONAL ENCODING LAYER
-# ===============================================
+#positional encoding layer
 class PositionalEncoding(nn.Module):
     def __init__(self, emb_dim, max_len=5000):
         super().__init__()
@@ -118,9 +108,7 @@ class PositionalEncoding(nn.Module):
         # Add positional encodings to embeddings
         return x + self.pe[:, :x.size(1), :]
 
-# ===============================================
-# 3️⃣ TRANSFORMER-BASED SEQ2SEQ MODEL
-# ===============================================
+#transformer based seq2seq model
 class TransformerSeq2Seq(nn.Module):
     def __init__(self, src_vocab_size, trg_vocab_size, emb_dim=128, nhead=8, num_layers=2, max_len=20, trg_pad_idx=0):
         super().__init__()
@@ -173,9 +161,7 @@ class TransformerSeq2Seq(nn.Module):
         output = self.fc_out(output)
         return output
 
-# ===============================================
-# 4️⃣ BLEU SCORE HELPERS (for evaluation)
-# ===============================================
+#bleu score
 def ids_to_sentence(ids, idx2word):
     # Converts list of IDs → words, ignoring special tokens
     return [idx2word[i] for i in ids if i not in (0, 1, 2)]
@@ -187,9 +173,7 @@ def compute_bleu(preds, refs, idx2word):
     smoothie = SmoothingFunction().method4
     return corpus_bleu(ref_sentences, pred_sentences, smoothing_function=smoothie)
 
-# ===============================================
-# 5️⃣ MAIN TRAINING FUNCTION
-# ===============================================
+
 def main():
     csv_file = "Hindi_English_Truncated_Corpus.csv"
     max_len = 20
