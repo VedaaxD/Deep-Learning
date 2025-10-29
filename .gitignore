@@ -4,3 +4,5 @@ Lab6_and_Lab7/faces/
 *.tar.gz
 data/
 Transfer_Learning/data/
+Lab16/Hin2Eng_Model/
+*.pth
