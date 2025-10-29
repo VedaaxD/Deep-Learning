@@ -69,10 +69,6 @@ def encode(sentence,vocab):
     return [vocab.get(w,vocab["<UNK>"]) for w in sentence.split()] #for every word in the sentence it gets the index, if present
 #in the vocab, otherwise returns the index for the unknown
 
-# def pad_sequences(sequences,pad_index):
-#     max_len=max(len(s) for s in sequences)
-#     padded=[s+[pad_index] * (max_len - len(s)) for s in sequences]
-#     return torch.tensor(padded,dtype=torch.long)
 def pad_sequences(sequences, pad_index):
     max_len = max(len(s) for s in sequences)
     padded = [torch.cat([s, torch.full((max_len - len(s),), pad_index, dtype=torch.long)]) for s in sequences]
@@ -86,6 +82,46 @@ print(f"English vocab size: {len(eng_vocab)}, Hindi vocab size: {len(hin_vocab)}
 #TRAIN TEST SPLIT
 pairs=list(zip(lines["english_sentence"],lines["hindi_sentence"]))
 train_pairs,test_pairs=train_test_split(pairs,test_size=0.1,random_state=42)
+from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
+import nltk
+nltk.download('punkt')
+
+# --- Translation function ---
+def translate_sentence(model, sentence, source_vocab, target_vocab, target_idx2word, max_len=20):
+    model.eval()
+    src = torch.tensor(encode(sentence.lower(), source_vocab), dtype=torch.long).unsqueeze(0)
+    hidden = model.encoder(src)
+    input_token = torch.tensor([target_vocab["START_"]], dtype=torch.long)  # start token
+    outputs = []
+
+    with torch.no_grad():
+        for _ in range(max_len):
+            output, hidden = model.decoder(input_token, hidden)
+            top1 = output.argmax(1)
+            word = target_idx2word[top1.item()]
+            if word == "_END":
+                break
+            outputs.append(word)
+            input_token = top1
+
+    return " ".join(outputs)
+
+
+# --- BLEU score calculation ---
+def evaluate_bleu(model, test_pairs, source_vocab, target_vocab, target_idx2word, n_samples=100):
+    smoothie = SmoothingFunction().method4
+    scores = []
+
+    for i, (eng, hin) in enumerate(test_pairs[:n_samples]):  # evaluate on subset for speed
+        pred = translate_sentence(model, eng, source_vocab, target_vocab, target_idx2word)
+        ref = hin.replace("START_", "").replace("_END", "").split()
+        pred_tokens = pred.split()
+        bleu = sentence_bleu([ref], pred_tokens, smoothing_function=smoothie)
+        scores.append(bleu)
+
+    avg_bleu = sum(scores) / len(scores)
+    print(f"Average BLEU score on {n_samples} samples: {avg_bleu:.4f}")
+    return avg_bleu
 
 #DATASET AND DATALOADER
 class TranslationDataset(Dataset):
@@ -103,12 +139,6 @@ class TranslationDataset(Dataset):
         trg_ids = torch.tensor(encode(target, self.target_vocab), dtype=torch.long)
         return src_ids, trg_ids
 
-
-# def collate_fn(batch):
-#     src_batch,trg_batch=zip(*batch)
-#     src_padded=pad_sequences(src_batch,pad_index=0)
-#     trg_padded=pad_sequences(trg_batch,pad_index=0)
-#     return src_padded, trg_padded
 def collate_fn(batch):
     src_batch, trg_batch = zip(*batch)
     src_padded = pad_sequences(src_batch, pad_index=0)
@@ -181,35 +211,62 @@ class Seq2Seq(nn.Module):
             input_token = trg[:, t] if teacher_force else top1
         return outputs
 
-#INIT AND TRAIN THE MODEL
-model_type="lstm" #or "gru"
-input_dim=len(eng_vocab)
-output_dim=len(hin_vocab)
-embed_dim=256
-hidden_dim=512
 
-encoder=Encoder(input_dim,embed_dim,hidden_dim,model_type=model_type)
-decoder=Decoder(output_dim,embed_dim,hidden_dim,model_type=model_type)
-model=Seq2Seq(encoder,decoder)
+# --- TRAIN AND EVALUATE FUNCTION ---
+def train_and_evaluate(model, train_loader, test_pairs, eng_vocab, hin_vocab, hin_idx2word,
+                       criterion, optimizer, n_epochs=5, teacher_forcing_ratio=0.5, max_len=20):
+    for epoch in range(n_epochs):
+        model.train()
+        total_loss = 0
+        for src, trg in train_loader:
+            optimizer.zero_grad()
+            output = model(src, trg, teacher_forcing_ratio)
+            output_dim = output.shape[-1]
+            output_flat = output[:, 1:].reshape(-1, output_dim)
+            trg_flat = trg[:, 1:].reshape(-1)
+            loss = criterion(output_flat, trg_flat)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
 
-criterion=nn.CrossEntropyLoss(ignore_index=0)
-optimizer=torch.optim.Adam(model.parameters(),lr=1e-3)
+        avg_loss = total_loss / len(train_loader)
+        print(f"Epoch {epoch + 1}/{n_epochs}, Loss: {avg_loss:.4f}")
 
-for epoch in range(10):
-    model.train()
-    total_loss=0
-    for src,trg in train_loader:
-        src, trg = src,trg
-        optimizer.zero_grad()
-        output = model(src, trg)
-        output_dim = output.shape[-1]
-        output = output[:, 1:].reshape(-1, output_dim)
-        trg = trg[:, 1:].reshape(-1)
-        loss = criterion(output, trg)
-        loss.backward()
-        optimizer.step()
-        total_loss += loss.item()
+    # Evaluate BLEU after training
+    avg_bleu = evaluate_bleu(model, test_pairs, eng_vocab, hin_vocab, hin_idx2word, n_samples=100)
+    return avg_bleu
 
-    print(f"Epoch {epoch + 1}/10, Loss: {total_loss / len(train_loader):.4f}")
 
-    print("Training complete.")
+# --- TRAIN LSTM ---
+encoder_lstm = Encoder(len(eng_vocab), 256, 512, model_type="lstm")
+decoder_lstm = Decoder(len(hin_vocab), 256, 512, model_type="lstm")
+model_lstm = Seq2Seq(encoder_lstm, decoder_lstm)
+optimizer_lstm = torch.optim.Adam(model_lstm.parameters(), lr=1e-3)
+criterion = nn.CrossEntropyLoss(ignore_index=0)
+
+print("Training LSTM...")
+bleu_lstm = train_and_evaluate(model_lstm, train_loader, test_pairs, eng_vocab, hin_vocab, hin_idx2word,
+                               criterion, optimizer_lstm, n_epochs=5)
+
+# --- TRAIN GRU ---
+encoder_gru = Encoder(len(eng_vocab), 256, 512, model_type="gru")
+decoder_gru = Decoder(len(hin_vocab), 256, 512, model_type="gru")
+model_gru = Seq2Seq(encoder_gru, decoder_gru)
+optimizer_gru = torch.optim.Adam(model_gru.parameters(), lr=1e-3)
+
+print("\nTraining GRU...")
+bleu_gru = train_and_evaluate(model_gru, train_loader, test_pairs, eng_vocab, hin_vocab, hin_idx2word,
+                              criterion, optimizer_gru, n_epochs=5)
+
+# --- COMPARE BLEU SCORES ---
+print("\nAverage BLEU Scores:")
+print(f"LSTM: {bleu_lstm:.4f}")
+print(f"GRU: {bleu_gru:.4f}")
+
+if bleu_lstm > bleu_gru:
+    print("✅ LSTM performs better")
+elif bleu_gru > bleu_lstm:
+    print("✅ GRU performs better")
+else:
+    print("Both models perform equally")
+
